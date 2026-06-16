@@ -20,6 +20,10 @@ public partial class PostWindow : Window
     private string _composeClip = "";   // original clip, or censored version if profanity was blurred
     private string _subtitlePath = "";  // generated .ass of your voice captions (empty if none)
 
+    // Per-job scratch folder so concurrent PostWindows never clobber each other's
+    // frames / overlay / thumbnail temp files.
+    private readonly string _work;
+
     private static string OutDir   => AppPaths.Output;
     private static string ThumbDir => AppPaths.Thumbnails;
 
@@ -29,17 +33,19 @@ public partial class PostWindow : Window
         _reactionPath = reactionPath;
         _clipPath     = clipPath;
         _micPath      = micPath;
+        _work = Path.Combine(Path.GetTempPath(), "ReactionStudio", "job_" + Guid.NewGuid().ToString("N")[..10]);
         Directory.CreateDirectory(OutDir);
         Directory.CreateDirectory(ThumbDir);
+        Directory.CreateDirectory(_work);
         Loaded += (_, _) => _ = ProcessAsync();
     }
 
     private async Task ProcessAsync()
     {
-        string ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        string ts = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
         _outputPath = Path.Combine(OutDir,   $"reaction_{ts}.mp4");
         _thumbPath  = Path.Combine(ThumbDir, $"thumb_{ts}.jpg");
-        string tempDir = Path.Combine(Path.GetTempPath(), "ReactionStudio");
+        string tempDir = _work;
         _reactFrame  = Path.Combine(tempDir, "react_frame.jpg");
         _clipFrame   = Path.Combine(tempDir, "clip_frame.jpg");
         _composeClip = _clipPath;
@@ -115,14 +121,13 @@ public partial class PostWindow : Window
     // Re-runnable from the "Re-render" button after editing the caption/toggle.
     private async Task RenderAsync(string caption, bool includeCaption)
     {
-        string tempDir    = Path.Combine(Path.GetTempPath(), "ReactionStudio");
-        string overlayPng = Path.Combine(tempDir, "text_overlay.png");
+        string overlayPng = Path.Combine(_work, "text_overlay.png");
 
         // When caption is off, build the thumbnail with no text and skip the overlay.
         string thumbCaption = includeCaption ? caption : "";
 
         SetProgress(22, "Building thumbnail…");
-        await BuildThumbAndOverlayAsync(_reactFrame, _clipFrame, thumbCaption, _thumbPath!, overlayPng);
+        await BuildThumbAndOverlayAsync(_work, _reactFrame, _clipFrame, thumbCaption, _thumbPath!, overlayPng);
 
         SetProgress(30, "Composing video…");
         // Release the output file if the preview is holding it (re-render case)
@@ -211,18 +216,18 @@ public partial class PostWindow : Window
     private void Window_Closing(object? s, System.ComponentModel.CancelEventArgs e)
     {
         try { VideoPlayer.Stop(); VideoPlayer.Source = null; } catch { }
+        try { Directory.Delete(_work, true); } catch { }
     }
 
     // Builds BOTH the YouTube thumbnail and a transparent text-overlay PNG for the
     // video — using identical hook-text styling (bold white + thick black outline)
     // so the on-screen text matches between the thumbnail and the video.
-    private static async Task BuildThumbAndOverlayAsync(string reactFrame, string clipFrame,
+    private static async Task BuildThumbAndOverlayAsync(string workDir, string reactFrame, string clipFrame,
                                                         string caption, string thumbOut,
                                                         string overlayOut)
     {
-        string tempDir    = Path.Combine(Path.GetTempPath(), "ReactionStudio");
-        string scriptPath = Path.Combine(tempDir, "make_thumb.py");
-        string capFile    = Path.Combine(tempDir, "caption.txt");
+        string scriptPath = Path.Combine(workDir, "make_thumb.py");
+        string capFile    = Path.Combine(workDir, "caption.txt");
         await File.WriteAllTextAsync(capFile, caption);
 
         string script =

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -14,17 +15,29 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Loaded += (_, _) => RefreshClips();
+        Loaded += (_, _) => { ClipList.ItemsSource = _items; RefreshClips(); };
     }
 
-    private List<ClipItem> _items = new();
+    // Live collection — adding a clip doesn't rebuild the list, so in-progress
+    // script rings on other rows keep updating.
+    private readonly ObservableCollection<ClipItem> _items = new();
+    private int _activeDownloads = 0;
 
     // ── Clip list ─────────────────────────────────────────────────────────────
     private void RefreshClips()
     {
-        _items = YtDlpService.GetClips().Select(f => new ClipItem(f)).ToList();
-        ClipList.ItemsSource = _items;
+        _items.Clear();
+        foreach (var f in YtDlpService.GetClips()) _items.Add(new ClipItem(f));
+        UpdateIdleStatus();
+    }
 
+    private void UpdateIdleStatus()
+    {
+        if (_activeDownloads > 0)
+        {
+            StatusText.Text = $"⬇ Downloading {_activeDownloads} video(s)…";
+            return;
+        }
         int count = _items.Count;
         StatusText.Text = count == 0
             ? "No clips yet — paste a URL above to download one"
@@ -77,28 +90,42 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter) await StartDownload();
     }
 
+    // Multiple downloads can run at once. The box clears immediately so you can
+    // paste the next URL right away; each finished download adds its own clip and
+    // kicks off that clip's script generation.
     private async Task StartDownload()
     {
         string url = UrlBox.Text.Trim();
         if (string.IsNullOrEmpty(url)) return;
+        UrlBox.Clear();
 
-        StatusText.Text = "Downloading…";
+        // snapshot existing clips so we can identify what THIS download produced
+        var before = new HashSet<string>(
+            YtDlpService.GetClips().Select(f => f.FullName), StringComparer.OrdinalIgnoreCase);
+
+        _activeDownloads++;
+        UpdateIdleStatus();
         try
         {
-            var progress = new Progress<string>(msg => StatusText.Text = msg);
-            await YtDlpService.DownloadAsync(url, progress);
-            UrlBox.Clear();
-            RefreshClips();
+            await YtDlpService.DownloadAsync(url, new Progress<string>(_ => { }));
 
-            // Auto-generate the reaction script for the newest clip
-            var newest = YtDlpService.GetClips().FirstOrDefault();
-            if (newest != null)
-                _ = GenerateScriptFor(newest.FullName);
+            foreach (var f in YtDlpService.GetClips())
+            {
+                if (!before.Contains(f.FullName) && _items.All(i => i.Path != f.FullName))
+                {
+                    _items.Insert(0, new ClipItem(f));
+                    _ = GenerateScriptFor(f.FullName);
+                }
+            }
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
-            MessageBox.Show(ex.Message, "Download failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusText.Text = $"Download error: {ex.Message}";
+        }
+        finally
+        {
+            _activeDownloads--;
+            UpdateIdleStatus();
         }
     }
 

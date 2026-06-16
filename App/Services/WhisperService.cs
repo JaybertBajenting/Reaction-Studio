@@ -21,9 +21,10 @@ public static class WhisperService
 
         string tempDir = Path.Combine(Path.GetTempPath(), "ReactionStudio");
         Directory.CreateDirectory(tempDir);
-        string scriptPath = Path.Combine(tempDir, "whisper_transcribe.py");
-        string outJson    = Path.Combine(tempDir, "words.json");
-        try { File.Delete(outJson); } catch { }
+        // Unique names so concurrent transcriptions don't collide.
+        string id         = Guid.NewGuid().ToString("N")[..8];
+        string scriptPath = Path.Combine(tempDir, $"whisper_{id}.py");
+        string outJson    = Path.Combine(tempDir, $"words_{id}.json");
 
         string script =
             "import sys, json\n" +
@@ -74,6 +75,11 @@ public static class WhisperService
             }
         }
         catch { }
+        finally
+        {
+            try { File.Delete(scriptPath); } catch { }
+            try { File.Delete(outJson); } catch { }
+        }
         return result;
     }
 }
