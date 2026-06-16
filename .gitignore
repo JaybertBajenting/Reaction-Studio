@@ -1,0 +1,17 @@
+# ── Build output ────────────────────────────────────────────
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+
+# ── Secrets — NEVER commit ──────────────────────────────────
+client_secret.json
+app-data/
+
+# ── Runtime data / user content (large, machine-specific) ───
+clips/
+output/
+thumbnails/
+temp/
+style_profile.json
+*.script.txt

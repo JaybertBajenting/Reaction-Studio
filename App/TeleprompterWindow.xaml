@@ -1,0 +1,31 @@
+<Window x:Class="ReactionStudio.TeleprompterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Teleprompter" Height="560" Width="440"
+        MinHeight="200" MinWidth="280"
+        Background="{StaticResource BgBrush}"
+        Topmost="True"
+        ShowInTaskbar="True"
+        WindowStartupLocation="Manual">
+
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="💬  Your Script"
+                   Foreground="{StaticResource OrangeBrush}"
+                   FontFamily="Segoe UI" FontSize="16" FontWeight="Bold"/>
+        <TextBlock Grid.Row="1" Text="read this while you react — drag me to another screen"
+                   Style="{StaticResource Muted}" Margin="0,2,0,12"/>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <TextBlock x:Name="ScriptText"
+                       Text="✨ Generating your script…"
+                       Foreground="White" TextWrapping="Wrap"
+                       FontFamily="Segoe UI" FontSize="26" LineHeight="44"/>
+        </ScrollViewer>
+    </Grid>
+</Window>

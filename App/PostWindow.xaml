@@ -1,0 +1,146 @@
+<Window x:Class="ReactionStudio.PostWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Processing" Height="900" Width="680"
+        MinHeight="640" MinWidth="540"
+        Background="{StaticResource BgBrush}"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Closing="Window_Closing">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="8"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="*"/>     <!-- video + thumbnail -->
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>  <!-- caption -->
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="Auto"/>  <!-- title -->
+            <RowDefinition Height="20"/>
+            <RowDefinition Height="Auto"/>  <!-- buttons -->
+        </Grid.RowDefinitions>
+
+        <!-- Heading -->
+        <TextBlock Grid.Row="0" Text="🎬  Post-Processing"
+                   Style="{StaticResource H1}"/>
+
+        <!-- Status + progress -->
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="10"/>
+                <RowDefinition Height="6"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <TextBlock x:Name="StatusText"
+                           Foreground="{StaticResource TextBrush}"
+                           FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
+                           Text="Starting…"/>
+                <TextBlock x:Name="PctText"
+                           Foreground="{StaticResource AccentBrush}"
+                           FontFamily="Segoe UI" FontSize="13" FontWeight="Bold"
+                           Text="0%" HorizontalAlignment="Right"/>
+            </Grid>
+
+            <ProgressBar x:Name="ProgressBar" Grid.Row="2"
+                         Height="10" Value="0" Maximum="100"
+                         Style="{StaticResource DarkProgress}"/>
+        </Grid>
+
+        <!-- Video preview (left) + thumbnail (right) -->
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Final video, playable -->
+            <DockPanel Grid.Column="0">
+                <TextBlock DockPanel.Dock="Top" Text="Final video — click to play / pause"
+                           Style="{StaticResource Muted}" Margin="0,0,0,4"/>
+                <Border Background="Black" CornerRadius="6">
+                    <Grid>
+                        <MediaElement x:Name="VideoPlayer"
+                                      LoadedBehavior="Manual" UnloadedBehavior="Stop"
+                                      Stretch="Uniform"
+                                      MouseDown="VideoPlayer_MouseDown"
+                                      MediaEnded="VideoPlayer_MediaEnded"/>
+                        <!-- Play overlay -->
+                        <TextBlock x:Name="PlayIcon" Text="▶"
+                                   Foreground="#CCFFFFFF" FontSize="56"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsHitTestVisible="False" Visibility="Collapsed"/>
+                    </Grid>
+                </Border>
+            </DockPanel>
+
+            <!-- YouTube thumbnail -->
+            <DockPanel Grid.Column="2">
+                <TextBlock DockPanel.Dock="Top" Text="Thumbnail"
+                           Style="{StaticResource Muted}" Margin="0,0,0,4"/>
+                <Border Width="180" Height="320"
+                        Background="{StaticResource CardBrush}"
+                        CornerRadius="6" VerticalAlignment="Top">
+                    <Image x:Name="ThumbImage" Stretch="UniformToFill"/>
+                </Border>
+            </DockPanel>
+        </Grid>
+
+        <!-- Caption -->
+        <StackPanel Grid.Row="6">
+            <Grid Margin="0,0,0,4">
+                <TextBlock Text="Caption (editable):" Style="{StaticResource Muted}"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <CheckBox x:Name="VoiceCaptionToggle" Content="Voice captions"
+                              IsChecked="True" Margin="0,0,14,0"
+                              Foreground="{StaticResource MutedBrush}"
+                              FontFamily="Segoe UI" FontSize="12"/>
+                    <CheckBox x:Name="CaptionToggle" Content="Show hook caption"
+                              IsChecked="True"
+                              Foreground="{StaticResource MutedBrush}"
+                              FontFamily="Segoe UI" FontSize="12"/>
+                </StackPanel>
+            </Grid>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="CaptionBox" Grid.Column="0" Style="{StaticResource DarkBox}"
+                         Text="Generating with Codex…"/>
+                <Button x:Name="RerenderBtn" Grid.Column="2" Content="↻ Re-render"
+                        Style="{StaticResource Btn}" Padding="12,9"
+                        IsEnabled="False"
+                        ToolTip="Re-build the video with the current caption text / toggle"
+                        Click="Rerender_Click"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- YouTube title -->
+        <StackPanel Grid.Row="8">
+            <TextBlock Text="YouTube Title:"
+                       Style="{StaticResource Muted}" Margin="0,0,0,4"/>
+            <TextBox x:Name="TitleBox" Style="{StaticResource DarkBox}"
+                     Text=""/>
+        </StackPanel>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="10" Orientation="Horizontal">
+            <Button x:Name="UploadBtn" Content="🚀  Upload to YouTube"
+                    Style="{StaticResource BtnAccent}"
+                    FontSize="14" Padding="18,9" Margin="0,0,10,0"
+                    IsEnabled="False"
+                    Click="Upload_Click"/>
+            <Button Content="📂  Open Output"
+                    Style="{StaticResource Btn}" Padding="14,9"
+                    Click="OpenOutput_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
