@@ -104,6 +104,9 @@ public static class StyleService
         sb.Append("Top titles:\n");
         foreach (var e in p.Examples.Take(25))
             sb.Append($"- {e.Title}\n");
+        sb.Append("IMPORTANT: match the VARIETY of how they open titles - they rarely start two titles the same way " +
+                  "(mix of \"He...\", \"That was...\", \"I...\", \"The...\", \"She...\", \"Why...\", plain observations). " +
+                  "Do NOT lean on one opener word like \"Bro\" - only use it occasionally, the way they do.\n");
 
         if (includeHooks)
         {
