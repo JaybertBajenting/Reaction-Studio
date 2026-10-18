@@ -9,9 +9,10 @@ namespace ReactionStudio;
 
 public partial class PostWindow : Window
 {
-    private readonly string  _reactionPath;
+    private readonly string  _reactionPath;   // webcam .avi, or character PNG in commentary mode
     private readonly string  _clipPath;
-    private readonly string? _micPath;
+    private string? _micPath;                  // mic .wav, or ElevenLabs voiceover .mp3 in commentary
+    private readonly bool    _commentary;      // AI character + voiceover instead of live reaction
     private string? _outputPath;
     private string? _thumbPath;
 
@@ -27,12 +28,13 @@ public partial class PostWindow : Window
     private static string OutDir   => AppPaths.Output;
     private static string ThumbDir => AppPaths.Thumbnails;
 
-    public PostWindow(string reactionPath, string clipPath, string? micPath = null)
+    public PostWindow(string reactionPath, string clipPath, string? micPath = null, bool commentary = false)
     {
         InitializeComponent();
         _reactionPath = reactionPath;
         _clipPath     = clipPath;
         _micPath      = micPath;
+        _commentary   = commentary;
         _work = Path.Combine(Path.GetTempPath(), "ReactionStudio", "job_" + Guid.NewGuid().ToString("N")[..10]);
         Directory.CreateDirectory(OutDir);
         Directory.CreateDirectory(ThumbDir);
@@ -88,22 +90,69 @@ public partial class PostWindow : Window
         }
 
         // ── Step 2: Frames (from the clip we'll actually use) ────────────────
-        SetProgress(12, "[2/4]  Extracting frames…");
-        await FfmpegService.ExtractFrameAsync(_reactionPath, _reactFrame, 0.4);
-        await FfmpegService.ExtractFrameAsync(_composeClip,  _clipFrame,  0.4);
+        SetProgress(12, "Extracting frames…");
+        await FfmpegService.ExtractFrameAsync(_composeClip, _clipFrame, 0.4);
+        if (_commentary)
+            _reactFrame = _reactionPath;   // the character PNG is the thumbnail's top
+        else
+            await FfmpegService.ExtractFrameAsync(_reactionPath, _reactFrame, 0.4);
+
+        // ── Step 2b: AI character commentary → voiceover ─────────────────────
+        if (_commentary)
+        {
+            SetProgress(16, "Writing commentary with Codex…");
+            // Continuous commentary sized to the clip so the voice runs OVER it (transformative).
+            double clipSecs = FfmpegService.GetDuration(_clipPath);
+            string script = await CodexService.GenerateOverlayCommentaryAsync(
+                Path.GetFileNameWithoutExtension(_clipPath), clipSecs, new[] { _clipFrame });
+
+            string voice = "";
+            // 1) ElevenLabs if configured…
+            if (ElevenLabsService.IsConfigured())
+            {
+                try
+                {
+                    SetProgress(20, "Voicing it with ElevenLabs…");
+                    voice = Path.Combine(tempDir, "voiceover.mp3");
+                    await ElevenLabsService.TextToSpeechAsync(script, voice);
+                }
+                catch (Exception ex)
+                {
+                    SetProgress(20, $"ElevenLabs failed ({ex.Message[..Math.Min(60, ex.Message.Length)]}) — using Windows voice…");
+                    voice = "";
+                }
+            }
+            // 2) …otherwise (or on failure) fall back to the free Windows voice
+            if (voice.Length == 0)
+            {
+                try
+                {
+                    SetProgress(20, "Voicing it (free Windows voice — set ElevenLabs for better quality)…");
+                    voice = Path.Combine(tempDir, "voiceover.wav");
+                    await LocalTtsService.SpeakToWavAsync(script, voice);
+                }
+                catch (Exception ex)
+                {
+                    SetProgress(20, $"Voiceover failed: {ex.Message[..Math.Min(100, ex.Message.Length)]}");
+                    Dispatcher.Invoke(() => RerenderBtn.IsEnabled = false);
+                    return;
+                }
+            }
+            _micPath = voice;   // compose mixes this as the "voice"; captions come from it
+        }
 
         // ── Step 3: Caption + YouTube title via Codex ────────────────────────
-        SetProgress(16, "[3/4]  Writing caption + title with Codex…");
+        SetProgress(24, "Writing caption + title with Codex…");
         string clipTitle = Path.GetFileNameWithoutExtension(_clipPath);
         var (caption, title) = await CodexService.GenerateCaptionAndTitleAsync(
             clipTitle, new[] { _clipFrame });
         Dispatcher.Invoke(() => { CaptionBox.Text = caption; TitleBox.Text = title; });
 
-        // ── Step 4: Transcribe your voice → caption file (once) ──────────────
-        if (cfg.AutoCaptions && _micPath != null && File.Exists(_micPath) &&
+        // ── Step 4: Transcribe the voice → word-caption file (once) ──────────
+        if ((cfg.AutoCaptions || _commentary) && _micPath != null && File.Exists(_micPath) &&
             new FileInfo(_micPath).Length > 1024)
         {
-            SetProgress(18, "[4/5]  Transcribing your voice (Whisper)…");
+            SetProgress(28, "Timing captions (Whisper)…");
             try
             {
                 var words = await WhisperService.TranscribeWordsAsync(_micPath);
@@ -138,15 +187,33 @@ public partial class PostWindow : Window
                 SetProgress(30 + f * 68, "Composing video (text + your voice)…"));
 
             string? overlay = (includeCaption && File.Exists(overlayPng)) ? overlayPng : null;
-            double micVol = ReactionStudio.Models.AppConfig.Load().MicVolume;
+            var cfg2 = ReactionStudio.Models.AppConfig.Load();
+            double micVol = cfg2.MicVolume;
             string clipForCompose = string.IsNullOrEmpty(_composeClip) ? _clipPath : _composeClip;
 
             bool wantVoiceCaps = Dispatcher.Invoke(() => VoiceCaptionToggle.IsChecked == true);
             string? subs = (wantVoiceCaps && !string.IsNullOrEmpty(_subtitlePath) &&
                             File.Exists(_subtitlePath)) ? _subtitlePath : null;
 
-            await FfmpegService.ComposeAsync(_reactionPath, _micPath, clipForCompose,
-                                             overlay, _outputPath!, pct, micVol, subs);
+            if (_commentary)
+            {
+                // Transformative: clip plays full-screen with the voiceover running OVER it
+                // (original audio ducked, captions throughout), character signs off at the end.
+                SetProgress(40, "Composing video (commentary over clip)…");
+                await FfmpegService.BuildFullscreenThumbAsync(_clipFrame, overlay, _thumbPath!);
+                string? whoosh = cfg2.UseSfxWhoosh ? SfxService.WhipSfx()   : null;
+                string? impact = cfg2.UseSfxImpact ? SfxService.ImpactSfx() : null;
+                await FfmpegService.ComposeOverlayCommentaryAsync(
+                    clipForCompose, _reactionPath, _micPath!, subs, _outputPath!, _work, micVol, overlay,
+                    cfg2.DuckVolume, cfg2.MuteOriginal,
+                    string.IsNullOrWhiteSpace(cfg2.MusicBedPath) ? null : cfg2.MusicBedPath, cfg2.MusicVolume,
+                    cfg2.ReframeClip, cfg2.Cutaways, whoosh, impact);
+            }
+            else
+            {
+                await FfmpegService.ComposeAsync(_reactionPath, _micPath, clipForCompose,
+                                                 overlay, _outputPath!, pct, micVol, subs);
+            }
         }
         catch (Exception ex)
         {

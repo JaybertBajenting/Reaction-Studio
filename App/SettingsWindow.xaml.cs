@@ -26,8 +26,11 @@ public partial class SettingsWindow : Window
         ScheduleToggle.IsChecked = _cfg.SchedulePublic;
         DayHourBox.Text   = _cfg.PeakHourDay.ToString();
         NightHourBox.Text = _cfg.PeakHourNight.ToString();
+        ElevenKeyBox.Text = _cfg.ElevenLabsApiKey;
+        VoiceIdBox.Text   = _cfg.ElevenLabsVoiceId;
         UpdateVolLabel();
         ShowStyleProfile();
+        ShowCharacter();
         Loaded += (_, _) => { _ = ScanAsync(); ScanMics(); };
     }
 
@@ -94,6 +97,71 @@ public partial class SettingsWindow : Window
         ShowStyleProfile();
     }
 
+    // ── AI character ──────────────────────────────────────────────────────────
+    private void ShowCharacter()
+    {
+        bool ok = !string.IsNullOrEmpty(_cfg.CharacterImage) && File.Exists(_cfg.CharacterImage);
+        CharStatus.Text = ok
+            ? $"✓ Character ready: {Path.GetFileName(_cfg.CharacterImage)}"
+            : "No character yet — pick your own image or generate one.";
+
+        if (ok)
+        {
+            var bi = new System.Windows.Media.Imaging.BitmapImage();
+            bi.BeginInit();
+            bi.UriSource     = new Uri(_cfg.CharacterImage);
+            bi.CacheOption   = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bi.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+            bi.EndInit();
+            CharPreview.Source     = bi;
+            CharPreview.Visibility = Visibility.Visible;
+        }
+        else CharPreview.Visibility = Visibility.Collapsed;
+    }
+
+    private void PickChar_Click(object s, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title  = "Pick your character image",
+            Filter = "Images|*.png;*.jpg;*.jpeg;*.webp"
+        };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            Directory.CreateDirectory(Services.CharacterService.CharDir);
+            string dst = Path.Combine(Services.CharacterService.CharDir,
+                                      "character" + Path.GetExtension(dlg.FileName).ToLowerInvariant());
+            // remove any previous character files so the picked one is unambiguous
+            foreach (var old in Directory.GetFiles(Services.CharacterService.CharDir, "character.*"))
+                { try { File.Delete(old); } catch { } }
+            File.Copy(dlg.FileName, dst, true);
+            _cfg.CharacterImage = dst;
+            ShowCharacter();
+        }
+        catch (Exception ex)
+        {
+            CharStatus.Text = $"Couldn't load image: {ex.Message}";
+        }
+    }
+
+    private async void GenChar_Click(object s, RoutedEventArgs e)
+    {
+        GenCharBtn.IsEnabled = false;
+        var prog = new Progress<string>(m => CharStatus.Text = m);
+        try
+        {
+            string png = await Services.CharacterService.GenerateAsync(CharDescBox.Text.Trim(), prog);
+            _cfg.CharacterImage = png;   // keep in-memory cfg in sync so Save doesn't wipe it
+            ShowCharacter();
+        }
+        catch (Exception ex)
+        {
+            CharStatus.Text = $"Generate failed: {ex.Message}";
+        }
+        GenCharBtn.IsEnabled = true;
+    }
+
     private async Task ScanAsync()
     {
         CameraCombo.IsEnabled = false;
@@ -138,6 +206,8 @@ public partial class SettingsWindow : Window
         _cfg.BlurProfanity = BlurProfanityToggle.IsChecked == true;
         _cfg.AutoCaptions  = AutoCaptionsToggle.IsChecked == true;
         _cfg.SchedulePublic = ScheduleToggle.IsChecked == true;
+        _cfg.ElevenLabsApiKey  = ElevenKeyBox.Text.Trim();
+        _cfg.ElevenLabsVoiceId = VoiceIdBox.Text.Trim();
         if (int.TryParse(DayHourBox.Text,   out int dh) && dh is >= 0 and <= 23) _cfg.PeakHourDay   = dh;
         if (int.TryParse(NightHourBox.Text, out int nh) && nh is >= 0 and <= 23) _cfg.PeakHourNight = nh;
 

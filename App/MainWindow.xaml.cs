@@ -140,6 +140,30 @@ public partial class MainWindow : Window
     private void React_Click(object s, RoutedEventArgs e) => OpenRecordWindow();
     private void ClipList_DoubleClick(object s, MouseButtonEventArgs e) => OpenRecordWindow();
 
+    // ── AI Character Commentary (no webcam) ────────────────────────────────────
+    private void Commentary_Click(object s, RoutedEventArgs e)
+    {
+        var clip = SelectedClip;
+        if (clip == null)
+        {
+            MessageBox.Show("Select a clip first.", "No clip selected",
+                            MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        // ElevenLabs is optional — falls back to a free Windows voice if not set up.
+        var cfg = ReactionStudio.Models.AppConfig.Load();
+        if (string.IsNullOrEmpty(cfg.CharacterImage) || !File.Exists(cfg.CharacterImage))
+        {
+            MessageBox.Show("Generate your character in Settings first (Generate Character).",
+                            "No character yet", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var win = new PostWindow(cfg.CharacterImage, clip.Path, micPath: null, commentary: true)
+        { Owner = this };
+        win.Show();
+    }
+
     private void OpenRecordWindow()
     {
         var clip = SelectedClip;

@@ -152,6 +152,55 @@ public static class CodexService
     private static double GetD(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.TryGetDouble(out var d) ? d : 0;
 
+    // Spoken commentary voiceover script for the AI-character mode. This is what
+    // ElevenLabs will read aloud over the clip, so it must be plain spoken prose.
+    public static async Task<string> GenerateCommentaryAsync(string clipTitle, IEnumerable<string> images)
+    {
+        string prompt =
+            "I'm making a short commentary video reacting to this clip with an animated character voiceover. " +
+            "Based on the attached frames, write what the character SAYS out loud - SHORT punchy spoken reactions, " +
+            "like a real creator who talks in quick bursts (think TikTok/Shorts commentary).\n" +
+            "Rules:\n" +
+            "- KEEP IT SHORT: 18-28 words TOTAL, max. A few snappy lines, not a paragraph.\n" +
+            "- Short bursts with natural pauses - NOT long run-on sentences.\n" +
+            "- Casual Gen Z energy; react to what actually happens; add a quick take or joke.\n" +
+            "- NO emojis, NO stage directions, NO quotes, no narrator labels. Just the spoken words." +
+            StyleService.BuildStyleBlock(includeHooks: true);
+        return await RunAsync(prompt, images);
+    }
+
+    // Continuous commentary that plays OVER the whole clip (the transformative format):
+    // the character's voice runs the ENTIRE clip like live commentary, then a sign-off.
+    // Sized to ~fill clipSeconds at a natural ~2.3 words/sec so it isn't a tacked-on tag.
+    public static async Task<string> GenerateOverlayCommentaryAsync(
+        string clipTitle, double clipSeconds, IEnumerable<string> images)
+    {
+        int secs   = (int)Math.Round(Math.Clamp(clipSeconds, 5, 55));
+        int target = Math.Clamp((int)(secs * 2.3), 14, 130);
+        int lo = (int)(target * 0.85), hi = (int)(target * 1.10);
+
+        string prompt =
+            $"I'm making a commentary Short. My ANIMATED CHARACTER talks continuously OVER a {secs}-second clip — " +
+            "their voice runs the WHOLE time like a creator doing live commentary, reacting as things happen.\n" +
+            "Study the attached frames (IN ORDER) and write what the character SAYS out loud, start to finish.\n" +
+            "This must be TRANSFORMATIVE commentary, not a play-by-play of what's already obvious on screen:\n" +
+            "- Lead with a clear ANGLE or take — an opinion, a hot take, a prediction, a 'here's the thing…', or a " +
+            "specific thing you noticed that a casual viewer would miss. Have a POINT, don't just narrate.\n" +
+            "- Add VALUE the clip alone doesn't: a quick why/how, context, a callout, a genuine judgment, or a joke that " +
+            "lands on a specific moment — so someone watches for YOUR take, not just the clip.\n" +
+            "- Build to a PAYOFF and end on one punchy sign-off line (the character's outro).\n" +
+            "Style:\n" +
+            $"- LENGTH: about {lo}-{hi} words total — it must fill ~{secs}s of talking at a natural pace. No filler.\n" +
+            "- Short spoken bursts with natural pauses; casual Gen Z energy; NOT a formal essay.\n" +
+            "- React to what's ACTUALLY on screen; don't invent things you can't see; use 'they'/'bro' if unsure of gender.\n" +
+            "- NO emojis, NO numbering, NO stage directions, NO quotes, no narrator labels. Just the spoken words." +
+            StyleService.BuildStyleBlock(includeHooks: true);
+        return await RunAsync(prompt, images);
+    }
+
+    /// <summary>Run a raw text prompt through Codex and return its reply.</summary>
+    public static Task<string> AskAsync(string prompt) => RunAsync(prompt, null);
+
     // ── Core subprocess call ────────────────────────────────────────────────
     private static async Task<string> RunAsync(string prompt, IEnumerable<string>? images)
     {

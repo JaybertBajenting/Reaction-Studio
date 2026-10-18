@@ -15,3 +15,13 @@ thumbnails/
 temp/
 style_profile.json
 *.script.txt
+character/
+blur_demo/
+
+# ── Third-party media — never commit (copyright / Content-ID risk, large) ──
+Sound Fx*/
+*.mp4
+*.mp3
+*.wav
+*.avi
+*.mov

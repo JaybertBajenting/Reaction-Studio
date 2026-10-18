@@ -143,9 +143,14 @@
         <!-- Action bar -->
         <StackPanel Grid.Row="3" Orientation="Horizontal"
                     Margin="16,8" VerticalAlignment="Center">
-            <Button Content="⏺  React" Style="{StaticResource BtnGreen}"
-                    FontSize="14" Padding="20,9" Margin="0,0,8,0"
+            <Button Content="⏺  React (you)" Style="{StaticResource BtnGreen}"
+                    FontSize="14" Padding="16,9" Margin="0,0,8,0"
+                    ToolTip="Record yourself reacting (live webcam / potato filter)"
                     Click="React_Click"/>
+            <Button Content="🎙  AI Commentary" Style="{StaticResource BtnAccent}"
+                    FontSize="14" Padding="16,9" Margin="0,0,8,0"
+                    ToolTip="Your character + ElevenLabs voiceover + captions (no webcam)"
+                    Click="Commentary_Click"/>
             <Button Content="🗑  Delete" Style="{StaticResource Btn}"
                     Foreground="#F87171" Margin="0,0,8,0"
                     Click="Delete_Click"/>
